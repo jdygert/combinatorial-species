@@ -1,0 +1,596 @@
+\documentclass{beamer}
+
+\usepackage{main}
+\usepackage{species-beamer}
+
+\title{Combinatorial Species}
+\author{Jonathan Dygert}
+\date{\today}
+
+\begin{document}
+
+\frame{\titlepage}
+
+\begin{frame}{Table of contents}
+  \tableofcontents
+\end{frame}
+
+\section{Introduction}
+\begin{frame}
+  Combinatorial species were introduced by French mathematician Andr\'e Joyal in his 1981 paper,
+  \citetitle{joyal}, to unify branches of combinatorics. The theory of combinatorial species is
+  still young, and the community is not yet in consensus on its utility.
+\end{frame}
+
+\begin{frame}
+  Combinatorial species provide a great mathematical representation for data structures.
+  With species, we can
+  \begin{itemize}
+    \item compare different structures
+    \item reason about their possible contents
+    \item perform operations such as differentiation
+    \item develop transformations between structures
+  \end{itemize}
+  We can also use combinatorial species as a framework for automated testing. If we claim that the
+  output of a function will always have a certain property, we can automatically generate all
+  possible inputs of a given size and see if the property holds. (Demonstrated later)
+\end{frame}
+
+\begin{frame}{Linked List}
+  As an example of a species, we can represent a linked list as follows:
+  \begin{block}{}
+    \[
+      \underbrace{L}_\text{A list} \quad
+      \underbrace{=}_\text{is} \quad
+      \underbrace{1}_\text{empty} \quad
+      \underbrace{+}_\text{or} \quad
+      \underbrace{X}_\text{an element} \quad
+      \underbrace{\bullet}_\text{and} \quad
+      \underbrace{L}_\text{another list}
+    \]
+  \end{block}
+  Expand this recursive definition to get \( L = 1 + X + X^2 + X^3 + \cdots \). \\
+  Thus, a list can have 0 elements, 1 element, 2 elements, and so on. \\
+  This also shows us that a linked list is isomorphic to an array-based list.
+\end{frame}
+
+\section{Combinatorial Species}
+\begin{frame}{What is a species?}
+  Informally, a species is \textcquote{yorgey}{a family of structures parameterized by a set of
+  labels which identify locations in the structures.} A species maps a given finite set of labels
+  into a set of structures containing those labels. The species must be ignorant of the contents of
+  the labels, and it must be possible to relabel without changing the structure itself.
+\end{frame}
+
+\begin{frame}
+  \begin{definition}
+    A \emph{species} \( F \) is a pair of mappings, \( F_\bullet \) and \( F_\leftrightarrow \),
+    where
+    \begin{itemize}
+      \item \( F_\bullet \) maps a finite set \( U \) to a finite set of structures, \( F_\bullet
+        [U] \), which can be ``built from'' the labels, commonly called the set of \( F
+        \)-structures over \( U \).
+      \item \( F_\leftrightarrow \) ``lifts'' a bijection \( \sigma : U_1 \leftrightarrow U_2 \)
+        between two label sets onto a bijection between \( F \)-structures,
+        \[
+          F_\leftrightarrow [\sigma] : F_\bullet [U_1] \leftrightarrow F_\bullet [U_2]
+        \]
+        This mapping must be functorial. That is, it should satisfy
+        \begin{itemize}
+          \item \( F_\leftrightarrow [id] = id \)
+          \item \( F_\leftrightarrow [\sigma_1 \circ \sigma_2]
+            = F_\leftrightarrow [\sigma_1] \circ F_\leftrightarrow [\sigma_2] \)
+        \end{itemize}
+        where \( id \) is the identity mapping and \( \circ \) is composition.
+    \end{itemize}~\cite{bergeron, yorgey}
+  \end{definition}
+\end{frame}
+
+\begin{frame}
+  \( F_\bullet \) is typically written as \( F \) for simplicity. Because \( F_\leftrightarrow \) is
+  functorial, the values of the labels are unimportant. The important property of the labels is that
+  they are distinct, so that we can distinguish different locations of the structure.
+\end{frame}
+
+\begin{frame}[fragile]
+  A species corresponds to a data structure generic over a single unrestricted type parameter, such
+  as Java's \verb|LinkedList<T>|. However, the labels do not correspond to the data held by the data
+  structure. Instead, they should be thought of as names for the locations within the structure.
+\end{frame}
+\begin{frame}[fragile]
+  As we explain species, we will implement them in the programming language Haskell. Here are the
+  extensions and imports used.
+  \begin{code}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE TypeApplications #-}
+
+import Data.List (foldl', delete, tails, inits, permutations)
+import Control.Monad (guard)
+  \end{code}
+\end{frame}
+\begin{frame}[fragile]
+  The first part of a species, \( F_\bullet \), takes a list of labels and creates a list of
+  structures. We say a type is enumerable if we have a function enumerate which takes a list of
+  labels and produces a list of structures.
+  \vfill
+  \begin{code}
+class Enumerable f where
+  enumerate :: [a] -> [f a]
+  \end{code}
+  \vfill
+  The second part of a species, the mapping \( F_\leftrightarrow \), corresponds to the functor
+  type class which is already present in Haskell.
+  \vfill
+  \begin{code}
+class Functor f where
+  fmap :: (a -> b) -> (f a -> f b)
+  \end{code}
+\end{frame}
+
+\subsection{Basic Species}
+\begin{frame}[fragile]{Zero}
+  \( 0 \) yields no structures no matter what labels it is given.  This is a type that has no values
+  and is the type of infinite loops and return type of functions that terminate the program.
+  \pause{}
+  \vfill
+  \begin{code}
+data Zero a
+
+instance Functor Zero where
+  fmap = undefined
+
+instance Enumerable Zero where
+  enumerate _ = []
+  \end{code}
+\end{frame}
+
+\begin{frame}[fragile]{One}
+  \( 1 \) yields a single structure when given no labels. It holds no data and has a single value.
+  This is like the return type \verb|void| in Java,
+  which can be thought of as nothing, or more precisely, a unit type that can always be created from
+  nothing.
+  \pause{}
+  \vfill
+  \begin{code}
+data One a = One
+
+instance Functor One where
+  fmap _ One = One
+
+instance Enumerable One where
+  enumerate [] = [One]
+  enumerate _ = []
+  \end{code}
+\end{frame}
+
+\begin{frame}[fragile]{Singleton}
+  \( X \) yields a single structure when given a single label. It holds exactly one piece of data.
+  This corresponds to the identity type, with no difference from the type it holds.
+  \pause{}
+  \vfill
+  \begin{code}
+data X a = X a
+
+instance Functor X where
+  fmap f (X a) = X (f a)
+
+instance Enumerable X where
+  enumerate [x] = [X x]
+  enumerate _ = []
+  \end{code}
+\end{frame}
+
+\subsection{Operators}
+\begin{frame}{Sum}
+  Species sum represents the word ``or'' and corresponds to a disjoint (tagged) union.  A structure
+  of \( F + G \) is either an \( F \)-structure or a \( G \)-structure along with a tag that
+  specifies which. Formally,
+  \[
+    (F + G)[U] = F[U] \uplus G[U]
+  \]
+  where \( \uplus \) is disjoint union over sets.~\cite{yorgey}
+\end{frame}
+\begin{frame}[fragile]{Sum (cont.)}
+  \begin{code}
+infixl 6 :+
+
+data (f :+ g) a = Inl (f a) | Inr (g a)
+
+instance (Functor f, Functor g) => Functor (f :+ g) where
+  fmap h (Inl x) = Inl (fmap h x)
+  fmap h (Inr x) = Inr (fmap h x)
+
+instance (Enumerable f, Enumerable g) => Enumerable (f :+ g) where
+  enumerate ls = map Inl (enumerate ls) ++ map Inr (enumerate ls)
+  \end{code}
+\end{frame}
+\begin{frame}{Natural Numbers}
+  We can generalize \( 0 \) and \( 1 \) to any natural number \( n \), which takes no labels and
+  produces \( n \) distinct structures.  \( n \) is the species sum of \( n \) total \( 1 \)
+  species.
+  \begin{exampleblock}{}
+    A Boolean (with values true or false) would have the species \( 2 = 1 + 1 \)
+  \end{exampleblock}
+\end{frame}
+
+
+\begin{frame}{Product}
+  Species product represents the word ``and'', and corresponds to a pair.  A structure of \( (F
+  \bullet G)[U] \) will be a pair of structures, one from \( F \) and one from \( G \), with the
+  labels of \( U \) split between the pair. That is,
+  \[
+    (F \bullet G)[U] = \Set{ (x, y) | U_1 \uplus U_2 = U,\, x \in F[U_1],\, y \in G[U_2] }
+  \]
+\end{frame}
+\begin{frame}[fragile]{Product (cont.)}
+% Small
+  \begin{code}
+infixl 7 :*
+
+data (f :* g) a = f a :* g a
+
+instance (Functor f, Functor g) => Functor (f :* g) where
+  fmap h (x :* y) = fmap h x :* fmap h y
+
+instance (Enumerable f, Enumerable g) => Enumerable (f :* g) where
+  enumerate ls = [ x :* y
+                 | (fls, gls) <- splits ls
+                 , x <- enumerate fls
+                 , y <- enumerate gls
+                 ]
+
+splits :: [a] -> [([a], [a])]
+splits [] = [([],[])]
+splits (x : xs) = (map . first) (x:) ss ++ (map . second) (x:) ss
+  where ss = splits xs
+        first f (x, y) = (f x, y)
+        second f (x, y) = (x, f y)
+  \end{code}
+\end{frame}
+
+\begin{frame}{Properties}
+  Species sum and product have the typical properties we expect of these operations.  They are
+  associative, commutative, and have identities of zero and one, respectively.  Multiplication
+  distributes over addition, and zero is an annihilator for multiplication.
+\end{frame}
+
+
+\subsection{Regular Species}
+\begin{frame}{Regular Species}
+  The species we have seen so far are all regular. Any species we construct from these using sum,
+  product, and self-reference will be regular.
+
+  \begin{definition}
+    A species is \emph{regular} if and only if it can be expressed in terms of \( 0 \), \( 1 \), \( X \),
+    \( + \), \( \bullet \), and \( \mu \) (self-reference).~\cite{yorgey}
+  \end{definition}
+
+  \vfill
+  \pause{}
+
+  A species is also regular when it has no non-trivial symmetries. In other words, all of its
+  possible structures will change if the labels are rearranged.
+
+  \begin{definition}
+    A species \( F \) is \emph{regular} if and only if, for all structures \( f \in F[U] \), the
+    only permutation \(\sigma \) such that \( F_\leftrightarrow [\sigma] (f) = f \) is the identity
+    permutation.~\cite{yorgey}
+  \end{definition}
+\end{frame}
+
+\section{Irregular Species}
+\subsection{Simple Irregular Species}
+\begin{frame}[fragile]{Set}
+  \( E \) is the species of a set, or unordered collection. For any set of labels, there will be
+  exactly one structure, the set itself. \( E \) is irregular, since it has every possible symmetry.
+  No matter what order the labels are in, we will get the same set.
+
+  \vfill
+  \pause{}
+
+  \begin{code}
+newtype Bag a = Bag [a]
+  deriving Functor
+
+instance Eq a => Eq (Bag a) where
+  Bag xs == Bag ys = xs `subBag` ys && ys `subBag` xs
+    where subBag b = null . foldl' (flip delete) b
+
+instance Enumerable Bag where
+  enumerate ls = [Bag ls]
+\end{code}
+\end{frame}
+
+\begin{frame}[fragile]{Cycle}
+  \( C \) is the species of a directed cycle. This is a nonempty loop that goes in a specific
+  direction. \( C \) is irregular because any permutation that rotates the labels along the loop is
+  symmetric.
+
+  \vfill
+  \pause{}
+
+  \begin{code}
+newtype Cycle a = Cycle [a]
+  deriving Functor
+
+instance Eq a => Eq (Cycle a) where
+  Cycle xs == Cycle ys = any (== ys) (rotations xs)
+    where rotations xs = zipWith (++) (tails xs) (inits xs)
+
+instance Enumerable Cycle where
+  enumerate [] = []
+  enumerate (x : xs) = (map (Cycle . (x:)) . permutations) xs
+  \end{code}
+\end{frame}
+
+\subsection{Other Operations}
+\begin{frame}{Composition}
+  Species composition represents the word ``of''. \( F \circ G \) means \( F \)-structures made of
+  \( G \)-structures. To form a structure of \( (F \circ G)[U] \), split \( U
+  \) into non-empty partitions and send each of those partitions separately to \( G \).  Then,
+  collect all those \( G \)-structures and send them to \(F \).
+
+  \begin{exampleblock}{}
+    \( L \circ E \) is a list of sets
+  \end{exampleblock}
+
+  \begin{exampleblock}{}
+    \( R = 1 + X \bullet (L \circ R) \) is a rose
+    tree, a tree where the nodes have an unspecified number of children.
+  \end{exampleblock}
+\end{frame}
+\begin{frame}[fragile]
+  \begin{code}
+newtype (f :. g) a = C (f (g a))
+
+instance (Functor f, Functor g) => Functor (f :. g) where
+  fmap h (C fg) = C $ (fmap . fmap) h fg
+
+instance (Enumerable f, Enumerable g) => Enumerable (f :. g) where
+  enumerate ls = [C y | p <- partitions ls
+                      , gs <- mapM enumerate p
+                      , y <- enumerate gs]
+
+partitions :: [a] -> [[[a]]]
+partitions [] = [[]]
+partitions (x : xs) = [ (x : ys) : p
+                      | (ys, zs) <- splits xs
+                      , p <- partitions zs
+                      ]
+  \end{code}
+\end{frame}
+
+\begin{frame}{Differentiation}
+  Informally, taking the derivative of a species puts a single ``hole'' in the structures, a
+  distinguished location not holding any data. That is,
+  \[
+    F'[U] = F[U \cup \{*\}]
+  \]
+  where \( * \) is a label distinct from all elements of \( U \).~\cite{yorgey}
+  \pause{}
+  \vfill
+  \begin{exampleblock}{}
+    \( L' = L^2 \).
+    If we put a hole in a list, we split it into two lists.
+  \end{exampleblock}
+  \begin{exampleblock}{}
+    \( E' = E \).
+    If we put a hole in a set, it does not change the set.
+  \end{exampleblock}
+  \begin{exampleblock}{}
+    \( C' = L \).
+    If we put a hole in a cycle, we break the loop into a list.
+  \end{exampleblock}
+\end{frame}
+\begin{frame}[fragile]
+  \begin{code}
+newtype Diff f a = Diff (f (Maybe a))
+  deriving Functor
+
+instance Enumerable f => Enumerable (Diff f) where
+  enumerate ls = map Diff (enumerate (Nothing : map Just ls))
+  \end{code}
+\end{frame}
+\begin{frame}
+  Species differentiation holds its expected properties compared to differentiation in calculus.
+  \begin{itemize}
+    \item \( 1' = 0 \)
+    \item \( X' = 1 \)
+    \item \( (F + G)' = F + G \)
+    \item \( (F \bullet G)' = F \bullet G' + F' \bullet G \)
+    \item \( (F \circ G)' = (F' \circ G) \bullet G' \)
+  \end{itemize}
+\end{frame}
+
+\section{Demonstration}
+\begin{frame}
+  Now we have the basics of species defined and can demonstrate their uses in Haskell!
+\end{frame}
+
+\begin{frame}[fragile]
+  First, we add an instance for Haskell's lists and make everything printable.
+  \vfill
+  \begin{code}
+instance Enumerable [] where
+  enumerate = permutations
+
+deriving instance Show (Zero a)
+deriving instance Show (One a)
+deriving instance Show a => Show (X a)
+deriving instance (Show (f a), Show (g a)) => Show ((f :+ g) a)
+deriving instance (Show (f a), Show (g a)) => Show ((f :* g) a)
+deriving instance Show a => Show (Cycle a)
+deriving instance Show a => Show (Bag a)
+deriving instance Show (f (g a)) => Show ((f :. g) a)
+deriving instance Show (f (Maybe a)) => Show (Diff f a)
+  \end{code}
+\end{frame}
+\begin{frame}[fragile]
+  Now we can try out enumerating our species.
+  \vfill
+  \begin{code}
+> enumerate @Cycle "abc"
+[Cycle "abc",Cycle "acb"]
+
+> enumerate @Bag "abc"
+[Bag "abc"]
+
+> enumerate @[] "abc"
+["abc","bac","cba","bca","cab","acb"]
+
+> length $ enumerate @[] [1..6]
+120
+
+> length $ enumerate @(Diff Cycle) [1..6]
+120
+  \end{code}
+\end{frame}
+\begin{frame}[fragile]
+  The species \( E \bullet E \) or \( E^2 \) corresponds to the powerset.
+  \begin{code}
+> mapM_ print $ enumerate @(Bag :* Bag) "abc"
+Bag "abc" :* Bag ""
+Bag "ab" :* Bag "c"
+Bag "ac" :* Bag "b"
+Bag "a" :* Bag "bc"
+Bag "bc" :* Bag "a"
+Bag "b" :* Bag "ac"
+Bag "c" :* Bag "ab"
+Bag "" :* Bag "abc"
+  \end{code}
+  \vfill
+  The species \( E \circ E \) corresponds to set partitioning.
+  \begin{code}
+> mapM_ print $ enumerate @(Bag :. Bag) "abc"
+C (Bag [Bag "abc"])
+C (Bag [Bag "ab",Bag "c"])
+C (Bag [Bag "ac",Bag "b"])
+C (Bag [Bag "a",Bag "bc"])
+C (Bag [Bag "a",Bag "b",Bag "c"])
+  \end{code}
+\end{frame}
+\begin{frame}[fragile]
+  Suppose we have a custom datatype.
+  \begin{code}
+data Family a = Monkey Bool a
+              | Group a [Family a]
+  deriving Show
+  \end{code}
+  \vfill
+  We can represent this using species we already defined.
+  \begin{code}
+type SBool = One :+ One
+newtype SFamily a = SFamily ((SBool :* X :+ X :* [] :. SFamily) a)
+  deriving Show
+
+instance Enumerable SFamily where
+  enumerate = map SFamily . enumerate
+  \end{code}
+\end{frame}
+\begin{frame}[fragile]
+  We can convert from the species to our datatype.
+  \begin{code}
+bool :: SBool a -> Bool
+bool (Inl One) = False
+bool (Inr One) = True
+
+family :: SFamily a -> Family a
+family (SFamily sf) = case sf of
+  Inl (b :* (X a)) -> Monkey (bool b) a
+  Inr ((X a) :* (C sfs)) -> Group a (map family sfs)
+  \end{code}
+  \vfill
+  Now we can easily generate values of our datatype.
+  \begin{code}
+> mapM_ print $ map family $ enumerate "ab"
+Group 'a' [Monkey False 'b']
+Group 'a' [Monkey True 'b']
+Group 'a' [Group 'b' []]
+Group 'b' [Monkey False 'a']
+Group 'b' [Monkey True 'a']
+Group 'b' [Group 'a' []]
+  \end{code}
+\end{frame}
+\begin{frame}[fragile]
+  We can use this to test functions that operate on our datatype. Suppose we have a function that
+  removes all false monkeys and a function that checks whether a family has any false monkeys.
+  \begin{code}
+removeFalseMonkeys :: Family a -> Family a
+hasFalseMonkeys :: Family a -> Bool
+  \end{code}
+  \vfill
+  We can test the removal function by generating families as input.
+  The list below will contain all families of at most size 5 which fail the test.
+  \begin{code}
+removalFailures :: [Family Int]
+removalFailures = do
+  size <- [1..5]
+  let labels = [1..size]
+  input <- family <$> enumerate labels
+  let output = removeFalseMonkeys fam
+  guard $ hasFalseMonkeys output
+  return input
+  \end{code}
+\end{frame}
+
+\begin{frame}[fragile]
+  We can generalize this to arbitrary functions and properties.
+% Small
+  \begin{code}
+failures :: Enumerable f
+         => (f Int -> g Int)
+         -> (g Int -> a)
+         -> (a -> Bool)
+         -> Int
+         -> [g Int]
+failures conversion function badProperty sizeLimit = do
+  size <- [1..sizeLimit]
+  let labels = [1..size]
+  input <- conversion <$> enumerate labels
+  let output = function input
+  guard $ badProperty output
+  return input
+  \end{code}
+  \vfill
+  Now we can represent our test more clearly.
+% Small
+  \begin{code}
+removalFailures :: [Family Int]
+removalFailures = failures family removeFalseMonkeys hasFalseMonkeys 5
+  \end{code}
+\end{frame}
+\begin{frame}[fragile]
+  We can also now easily test other functions. For example, we can test sorting a list.
+  \begin{code}
+sort :: [Int] -> [Int]
+isSorted :: [Int] -> Bool
+
+sortFailures :: [[Int]]
+sortFailures = failures id sort (not . isSorted) 4
+  \end{code}
+  This example gives us all failures of sorting a list of at most 4 integers.
+\end{frame}
+
+\section{Conclusion}
+\begin{frame}{Conclusion}
+  Combinatorial species are an interesting young branch of combinatorics, with many extensions such
+  as weighted, multi-sort, virtual, and molecular species.~\cite{yorgey} Species provide computer
+  scientists a great method for understanding data structures and can be applied to automated
+  testing to help improve software correctness.
+  \vfill
+  Ideas for improving the project:
+  \begin{itemize}
+    \item Add type operator for \( \mu \) to make anonymous recursive types possible
+    \item Extend the testing framework to make it easier to test many properties
+    \item Add typeclass to group together Functor, Enumerable, 0, 1, \( + \), \( \bullet \), etc.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Bibliography}
+  \printbibliography{}
+\end{frame}
+
+\end{document}

@@ -1,0 +1,15 @@
+\usepackage{csquotes}
+
+\theoremstyle{definition}
+\newmdtheoremenv{definition}{Definition}
+
+\emergencystretch=1em
+
+\newcommand*\titleheader[1]{\gdef\@titleheader{#1}}
+\AtBeginDocument{%
+  \let\st@red@title\@title
+  \def\@title{%
+    \bgroup\normalfont\large\centering\@titleheader\par\egroup
+    \vskip1.5em\st@red@title}
+}
+

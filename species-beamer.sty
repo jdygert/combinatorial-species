@@ -1,0 +1,24 @@
+\usepackage[outputdir=./latex.out/]{minted}
+\setminted{fontsize=\scriptsize}
+\newenvironment{code}
+{%
+  \VerbatimEnvironment
+  \begin{tcolorbox}
+  \begin{minted}{haskell}%
+}
+{%
+  \end{minted}%
+  \end{tcolorbox}
+}
+
+\usepackage{csquotes}
+
+\usetheme{Boadilla}
+\usecolortheme{beaver}
+\setbeamertemplate{bibliography item}{\insertbiblabel}
+
+\usepackage{tcolorbox}
+\usepackage{etoolbox}
+
+\emergencystretch=1em
+

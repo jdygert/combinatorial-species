@@ -1,0 +1,19 @@
+indentAfterHeadings:
+  section:
+    indentAfterThisHeading: 1
+    level: 2
+  subsection:
+    indentAfterThisHeading: 1
+    level: 4
+  printbibliography:
+    indentAfterThisHeading: 1
+    level: 2
+
+indentRules:
+  section:
+    afterHeading: "  "
+  subsection:
+    afterHeading: "  "
+  printbibliography:
+    afterHeading: "  "
+
